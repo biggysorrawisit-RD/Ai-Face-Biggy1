@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบวัดแววอัจฉริยะ AI - ครู BiGgy</title>
+  
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ธีม: น้ำเงิน-ทอง (Professional School Theme) */
+    :root {
+      --primary: #0d47a1;
+      --secondary: #ffd700;
+      --bg-color: #f0f2f5;
+      --text-color: #333;
+    }
+    
+    body { font-family: 'Kanit', sans-serif; background-color: var(--bg-color); margin: 0; padding: 0; color: var(--text-color); }
+    
+    /* กล้องลอยตัว (Sticky Widget) */
+    #camera-widget {
+      position: fixed; top: 20px; right: 20px; width: 200px; z-index: 1000;
+      background: #000; border-radius: 12px; overflow: hidden;
+      border: 3px solid var(--secondary); box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+    #camera-widget video, #camera-widget canvas { width: 100%; height: 150px; object-fit: cover; transform: scaleX(-1); display: block; }
+    #ai-status {
+      background: var(--primary); color: white; padding: 5px; text-align: center; font-size: 0.8rem;
+    }
+
+    /* Layout */
+    .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; margin-right: 240px; } /* เว้นที่ขวาให้กล้อง */
+    .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; animation: fadeIn 0.5s; }
+    
+    h1, h2 { color: var(--primary); margin-top: 0; }
+    .btn {
+      background: var(--primary); color: white; border: none; padding: 12px 25px;
+      border-radius: 50px; font-size: 1rem; cursor: pointer; transition: 0.2s; margin: 5px;
+    }
+    .btn:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+    .btn-gold { background: var(--secondary); color: #000; font-weight: bold; }
+    
+    /* Quiz Styles */
+    .choice-btn {
+      display: block; width: 100%; padding: 15px; margin: 10px 0; text-align: left;
+      background: #f8f9fa; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; transition: 0.2s;
+    }
+    .choice-btn:hover { background: #e3f2fd; border-color: var(--primary); }
+    .choice-btn.selected { background: var(--primary); color: white; }
+    textarea { width: 100%; height: 100px; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-family: 'Kanit'; }
+
+    .hidden { display: none; }
+    @media (max-width: 768px) {
+      #camera-widget { position: relative; width: 100%; top: 0; right: 0; margin-bottom: 20px; }
+      .container { margin-right: auto; }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    
+    /* Loader */
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:2000; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+  </style>
+</head>
+<body>
+
+  <div id="loader">
+    <div style="font-size:4rem;">🧠</div>
+    <h3>กำลังเชื่อมต่อระบบ AI...</h3>
+  </div>
+
+  <div id="camera-widget">
+    <div style="position:relative;">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="overlay" style="position:absolute; top:0; left:0;"></canvas>
+    </div>
+    <div id="ai-status">
+      <div id="user-name">กำลังค้นหา...</div>
+      <div id="emo-label" style="font-size:0.7rem; opacity:0.8;">-</div>
+    </div>
+  </div>
+
+  <div class="container">
+    
+    <div id="page-home" class="card">
+      <h1>🏫 ระบบวัดแววอัจฉริยะ (AI School)</h1>
+      <p>ยินดีต้อนรับเข้าสู่ระบบวิเคราะห์ศักยภาพด้วย AI</p>
+      
+      <div id="login-section" style="text-align:center; padding:20px; background:#f9f9f9; border-radius:10px;">
+        <h3>กรุณาสแกนใบหน้าเพื่อยืนยันตัวตน</h3>
+        <p style="color:red; font-size:0.9rem;">* รอให้ชื่อของคุณปรากฏที่มุมขวาบน *</p>
+        <div id="menu-area" class="hidden">
+           <hr>
+           <h3 style="color:var(--primary);">สวัสดีคุณ <span id="welcome-name">...</span></h3>
+           <p>เลือกทำแบบทดสอบ:</p>
+           <button class="btn btn-gold" onclick="startQuiz('career')">🎯 วัดแววอาชีพ (10 ข้อ)</button>
+           <button class="btn" onclick="startQuiz('com')">💻 วัดทักษะคอมพิวเตอร์ (5 ข้อ)</button>
+        </div>
+      </div>
+      
+      <div style="margin-top:20px; text-align:center;">
+        <small>ยังไม่เคยใช้งาน? <a href="#" onclick="showRegister()">ลงทะเบียนใบหน้าใหม่</a></small>
+      </div>
+    </div>
+
+    <div id="page-register" class="card hidden">
+      <h2>📝 ลงทะเบียนผู้ใช้งานใหม่</h2>
+      <input type="text" id="reg-name" placeholder="ชื่อ-นามสกุล (เช่น ด.ช.มีดี รักเรียน)" style="width:100%; padding:10px; margin-bottom:10px;">
+      <p>มองกล้องแล้วกดปุ่มด้านล่าง:</p>
+      <button class="btn" onclick="registerFace()">📸 บันทึกใบหน้า</button>
+      <button class="btn" style="background:#ccc;" onclick="location.reload()">ยกเลิก</button>
+    </div>
+
+    <div id="page-quiz" class="card hidden">
+      <h2 id="quiz-title">หัวข้อแบบทดสอบ</h2>
+      <div id="quiz-container"></div>
+      <div style="margin-top:20px; text-align:right;">
+        <button id="btn-next" class="btn hidden" onclick="nextQuestion()">ข้อถัดไป ➡️</button>
+      </div>
+    </div>
+
+    <div id="page-result" class="card hidden" style="text-align:center;">
+      <div style="font-size:4rem;">🎉</div>
+      <h2>ผลการวิเคราะห์โดย AI</h2>
+      <div id="result-content" style="text-align:left; background:#e8f5e9; padding:20px; border-radius:10px; margin-bottom:20px;"></div>
+      <button class="btn" onclick="location.reload()">🏠 กลับหน้าหลัก</button>
+    </div>
+
+  </div>
+
+  <script>
+    // ==========================================
+    // ⚠️ ใส่ URL ใหม่ที่ได้จากการ Deploy (Apps Script) ตรงนี้ครับ
+    // ==========================================
+    const GAS_URL = 'ใส่_URL_จาก_APPS_SCRIPT_ตรงนี้'; 
+    
+    const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+
+    // ตัวแปรระบบ
+    let faceMatcher = null;
+    let currentUser = null;
+    let quizType = '';
+    let qIndex = 0;
+    let score = 0;
+    let writtenAns = '';
+    
+    // --- ข้อมูลข้อสอบ ---
+    const quizCareer = [
+      { q: "1. ในงานกีฬาสีโรงเรียน คุณอยากทำหน้าที่อะไร?", choices: ["วาดคัทเอาท์/ทำฉาก (ศิลป์)", "วางแผนงบประมาณ/จัดตาราง (คำนวณ)", "ซ่อมอุปกรณ์/เดินไฟ (ช่าง)", "เป็นพิธีกร/ประสานงาน (สื่อสาร)"] },
+      { q: "2. เวลาว่างชอบดูคลิปแบบไหน?", choices: ["สอนวาดรูป/DIY", "ความรู้รอบตัว/วิทย์", "รีวิวแกดเจ็ต/รถยนต์", "Vlog ท่องเที่ยว/สัมภาษณ์"] },
+      { q: "3. ถ้าต้องเลือกของขวัญให้ตัวเอง?", choices: ["ชุดสี/ปากกา", "หนังสือ/เกมฝึกสมอง", "ชุดไขควง/ตัวต่อ", "ไมค์/กล้องถ่ายรูป"] },
+      { q: "4. คุณแก้ปัญหาเฉพาะหน้าอย่างไร?", choices: ["ใช้ความคิดสร้างสรรค์", "วิเคราะห์หาเหตุผล", "ลงมือลองผิดลองถูก", "ขอความช่วยเหลือ/เจรจา"] },
+      { q: "5. วิชาที่เรียนแล้วมีความสุข?", choices: ["ศิลปะ/ดนตรี", "คณิต/วิทย์", "การงานอาชีพ", "ภาษา/สังคม"] },
+      { q: "6. ถ้าโลกนี้มีเวทมนตร์ คุณอยากได้พลัง...", choices: ["เสกสิ่งของสวยงาม", "อ่านใจคน/รู้อนาคต", "ควบคุมเครื่องจักร", "พูดได้ทุกภาษา"] },
+      { q: "7. อนาคตอยากทำงานที่...", choices: ["สตูดิโอ/แกลเลอรี่", "ห้องแล็บ/ออฟฟิศ", "โรงงาน/ไซต์งาน", "พบปะผู้คน/เวที"] },
+      { q: "8. เพื่อนๆ มักชมว่าคุณ...", choices: ["แต่งตัวเก่ง/มีสไตล์", "ฉลาด/รอบคอบ", "ซ่อมของเก่ง", "คุยสนุก/เฟรนด์ลี่"] },
+      { q: "9. สีที่ชอบให้ความรู้สึกแบบไหน?", choices: ["พาสเทล/สดใส", "ขาวดำ/เรียบง่าย", "เมทัลลิค/เท่", "อบอุ่น/ธรรมชาติ"] },
+      { q: "10. ความสำเร็จสำหรับคุณคือ?", choices: ["ได้สร้างผลงานศิลปะ", "ได้ค้นพบความรู้ใหม่", "ได้สร้างสิ่งประดิษฐ์", "ได้เป็นที่รักของผู้คน"] },
+      { type: "text", q: "เป้าหมายในอีก 5 ปีข้างหน้าของคุณคืออะไร? (AI จะวิเคราะห์คำตอบ)" }
+    ];
+
+    const quizCom = [
+      { q: "1. สมองของคอมพิวเตอร์คือข้อใด?", choices: ["RAM", "CPU", "Harddisk", "Mouse"], ans: 1 },
+      { q: "2. ข้อใดคือระบบปฏิบัติการ (OS)?", choices: ["Microsoft Word", "Google Chrome", "Windows 11", "Facebook"], ans: 2 },
+      { q: "3. การกด Ctrl+C คือคำสั่งใด?", choices: ["วาง (Paste)", "คัดลอก (Copy)", "ตัด (Cut)", "บันทึก (Save)"], ans: 1 },
+      { q: "4. สัญลักษณ์สี่เหลี่ยมข้าวหลามตัดใน Flowchart หมายถึง?", choices: ["เริ่มต้น", "การตัดสินใจ", "การแสดงผล", "ทิศทาง"], ans: 1 },
+      { q: "5. ถ้าต้องการค้นหาข้อมูลบนอินเทอร์เน็ต ควรใช้?", choices: ["Search Engine", "Web Browser", "Social Media", "ถูกทุกข้อ"], ans: 3 }
+    ];
+
+    // --- เริ่มต้นระบบ ---
+    window.onload = async () => {
+      startVideo();
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+        ]);
+        await loadUsers(); // ดึงรายชื่อจาก Sheet
+        document.getElementById('loader').style.display = 'none';
+      } catch(e) { console.error(e); alert("Error loading AI. โปรดตรวจสอบ Internet"); }
+    };
+
+    // --- AI & Camera Logic ---
+    async function startVideo() {
+      const video = document.getElementById('video');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+      video.srcObject = stream;
+      
+      video.addEventListener('play', () => {
+        const canvas = document.getElementById('overlay');
+        const displaySize = { width: video.clientWidth, height: video.clientHeight };
+        faceapi.matchDimensions(canvas, displaySize);
+
+        setInterval(async () => {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceExpressions().withFaceDescriptors();
+          const resized = faceapi.resizeResults(detections, displaySize);
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          if(resized.length > 0) {
+            const d = resized[0];
+            
+            // 1. Emotion
+            const ex = d.expressions;
+            const emo = Object.keys(ex).reduce((a, b) => ex[a] > ex[b] ? a : b);
+            const emoThai = {neutral:"ปกติ", happy:"มีความสุข", sad:"เศร้า", angry:"โกรธ", surprised:"ตกใจ"}[emo] || emo;
+            document.getElementById('emo-label').innerText = `อารมณ์: ${emoThai}`;
+
+            // 2. Recognition
+            if(faceMatcher) {
+              const match = faceMatcher.findBestMatch(d.descriptor);
+              const label = match.toString();
+              new faceapi.draw.DrawBox(d.detection.box, { label: label }).draw(canvas);
+
+              if(match.label !== 'unknown') {
+                if(currentUser !== match.label) {
+                  currentUser = match.label;
+                  onUserIdentified(currentUser);
+                }
+              }
+            }
+          }
+        }, 500);
+      });
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch(GAS_URL + '?op=getUsers');
+        const users = await res.json();
+        if(users.length > 0) {
+          const labeled = users.map(u => new faceapi.LabeledFaceDescriptors(u.label, [new Float32Array(u.descriptor)]));
+          faceMatcher = new faceapi.FaceMatcher(labeled, 0.6);
+        }
+      } catch(e) { console.log("ยังไม่มีข้อมูลผู้ใช้ในระบบ"); }
+    }
+
+    function onUserIdentified(name) {
+      document.getElementById('user-name').innerText = name;
+      document.getElementById('welcome-name').innerText = name;
+      document.getElementById('menu-area').classList.remove('hidden');
+    }
+
+    // --- Registration ---
+    function showRegister() {
+      document.getElementById('page-home').classList.add('hidden');
+      document.getElementById('page-register').classList.remove('hidden');
+    }
+
+    async function registerFace() {
+      const name = document.getElementById('reg-name').value;
+      if(!name) return Swal.fire("แจ้งเตือน", "กรุณากรอกชื่อ", "warning");
+
+      const video = document.getElementById('video');
+      const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+      
+      if(det) {
+        Swal.showLoading();
+        await fetch(GAS_URL, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify({ action:'register', type:'student', name:name, descriptor: Array.from(det.descriptor) })
+        });
+        Swal.fire("สำเร็จ", "ลงทะเบียนแล้ว รีโหลดเพื่อใช้งาน", "success").then(()=>location.reload());
+      } else {
+        Swal.fire("ไม่พบใบหน้า", "ขยับหน้าให้ชัดเจน", "error");
+      }
+    }
+
+    // --- Quiz System ---
+    function startQuiz(type) {
+      quizType = type; qIndex = 0; score = 0; writtenAns = '';
+      document.getElementById('page-home').classList.add('hidden');
+      document.getElementById('page-quiz').classList.remove('hidden');
+      document.getElementById('quiz-title').innerText = (type==='career') ? "🎯 วัดแววอาชีพ" : "💻 วัดทักษะคอมพิวเตอร์";
+      renderQ();
+    }
+
+    function renderQ() {
+      const container = document.getElementById('quiz-container');
+      const nextBtn = document.getElementById('btn-next');
+      container.innerHTML = '';
+      nextBtn.classList.add('hidden');
+      
+      const list = (quizType==='career') ? quizCareer : quizCom;
+      const q = list[qIndex];
+
+      if(q.type === 'text') {
+        container.innerHTML = `<h3>${q.q}</h3><textarea id="ans-text"></textarea>`;
+        nextBtn.classList.remove('hidden');
+        nextBtn.onclick = () => { writtenAns = document.getElementById('ans-text').value; finishQuiz(); };
+      } else {
+        container.innerHTML = `<h3>ข้อ ${qIndex+1}: ${q.q}</h3>`;
+        q.choices.forEach((c, i) => {
+          const btn = document.createElement('div');
+          btn.className = 'choice-btn';
+          btn.innerText = c;
+          btn.onclick = () => {
+            document.querySelectorAll('.choice-btn').forEach(b=>b.classList.remove('selected'));
+            btn.classList.add('selected');
+            
+            // Score logic
+            if(quizType === 'com') { if(i === q.ans) score++; }
+            else { score += (i===0?1000 : i===1?100 : i===2?10 : 1); } // เก็บแต้มแยกสาย
+            
+            setTimeout(() => {
+              qIndex++;
+              if(qIndex < list.length) renderQ(); else finishQuiz();
+            }, 300);
+          };
+          container.appendChild(btn);
+        });
+      }
+    }
+
+    async function finishQuiz() {
+      document.getElementById('page-quiz').classList.add('hidden');
+      document.getElementById('page-result').classList.remove('hidden');
+      const content = document.getElementById('result-content');
+      content.innerHTML = "กำลังประมวลผล AI...";
+
+      let resultHTML = "";
+      
+      if(quizType === 'career') {
+        // Simple logic analysis
+        let s = score;
+        let c1 = Math.floor(s/1000); s%=1000; // Art
+        let c2 = Math.floor(s/100); s%=100; // Logic
+        let c3 = Math.floor(s/10); s%=10; // Mech
+        let c4 = s; // Social
+
+        let job = "นักสำรวจ";
+        let desc = "คุณมีความสนใจหลากหลาย ลองค้นหาตัวเองต่อไป";
+        
+        if(c1 >= c2 && c1 >= c3) { job = "ศิลปิน / ครีเอทีฟ"; desc = "คุณมีจินตนาการสูง เหมาะกับงานออกแบบ กราฟิก หรือนิเทศศาสตร์"; }
+        else if(c2 >= c1 && c2 >= c3) { job = "นักวิชาการ / นักวิเคราะห์"; desc = "คุณชอบการวางแผนและตรรกะ เหมาะกับโปรแกรมเมอร์ หรือนักบัญชี"; }
+        else if(c3 >= c2) { job = "วิศวกร / ช่างเทคนิค"; desc = "คุณชอบลงมือปฏิบัติ เหมาะกับงานช่าง วิศวะ หรือสถาปนิก"; }
+        else { job = "นักสื่อสาร / ผู้นำ"; desc = "คุณเข้ากับคนง่าย เหมาะกับการจัดการ หรือประชาสัมพันธ์"; }
+
+        resultHTML = `<h3>ผลลัพธ์: ${job}</h3><p>${desc}</p><p><strong>AI วิเคราะห์คำตอบเขียน:</strong> "${writtenAns}" <br>-> บ่งบอกถึงความมุ่งมั่นที่ดีเยี่ยม ขอให้ทำตามฝันให้สำเร็จ!</p>`;
+        
+        // Save
+        fetch(GAS_URL, { method:'POST', mode:'no-cors', body:JSON.stringify({action:'save_career', name:currentUser, score:score, written:writtenAns, aiResult:job}) });
+
+      } else {
+        let grade = (score >= 4) ? "ยอดเยี่ยม (Expert)" : (score >= 3) ? "ดี (Good)" : "พยายามอีกนิด";
+        resultHTML = `<h3>คะแนน: ${score} / 5</h3><p><strong>ระดับ:</strong> ${grade}</p><p>การคิดเชิงระบบและตรรกะสำคัญมาก ฝึกฝนต่อไปนะ!</p>`;
+        
+        // Save
+        fetch(GAS_URL, { method:'POST', mode:'no-cors', body:JSON.stringify({action:'save_comp', name:currentUser, score:score, aiResult:grade}) });
+      }
+      
+      content.innerHTML = resultHTML;
+    }
+  </script>
+</body>
+</html>
